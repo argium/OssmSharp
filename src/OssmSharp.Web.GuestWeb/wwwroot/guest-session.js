@@ -236,6 +236,7 @@ class Controls {
   }
   updateState(state) {
     if (this.destroyed) return;
+    const wasReady = this.ready;
     this.joined = state?.joined === true;
     this.ready = state?.ready === true;
     this.current = state?.current ?? null;
@@ -247,6 +248,8 @@ class Controls {
     if (!this.joined || !this.ready) {
       this.disarm();
       this.commandGeneration++;
+    } else if (!wasReady && state?.stopped !== true && !this.resettingPosition) {
+      this.previewStopped = false;
     }
     this.render();
   }
@@ -280,8 +283,10 @@ class Controls {
     this.sendButton.disabled = !this.canSend();
     this.autoSendToggle.disabled = !this.canSend();
     this.resetPositionButton.disabled = !this.canSend();
-    this.pattern.disabled = this.resetQueued || this.resettingPosition;
-    for (const input of Object.values(this.inputs)) input.disabled = this.resetQueued || this.resettingPosition;
+    const adjustable = this.joined && this.ready && !this.resetQueued && !this.resettingPosition;
+    this.pattern.disabled = !adjustable;
+    for (const input of Object.values(this.inputs)) input.disabled = !adjustable;
+    this.root.toggleAttribute("data-sensation", selected.pattern !== 0);
     const status = this.resetQueued || this.resettingPosition ? "Resetting position ..." : this.sent ? "Last changed selection sent." : "Choose settings, then Send.";
     const display = {
       selected,

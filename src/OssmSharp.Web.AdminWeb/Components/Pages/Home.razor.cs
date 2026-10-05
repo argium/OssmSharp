@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace OssmSharp.Web.AdminWeb.Components.Pages;
 
 /// <summary>
@@ -5,6 +7,10 @@ namespace OssmSharp.Web.AdminWeb.Components.Pages;
 /// </summary>
 public partial class Home
 {
+    private const double CentimetresPerInch = 2.54;
+    /// <summary>The attachment length used until the user chooses one, in centimetres.</summary>
+    private const double DefaultAttachmentLengthCm = 24;
+
     private readonly CancellationTokenSource _lifetime = new();
     private UserNoticeState _notice = null!;
     private UserSessionState? _state;
@@ -16,6 +22,8 @@ public partial class Home
     private bool _connecting;
     private bool _connectionLost;
     private bool _previewStopped;
+    private double _attachmentLengthCm = DefaultAttachmentLengthCm;
+
     private DeviceSettingsSnapshot? _stoppedSettings;
     private string _noticeVariant = "success";
 
@@ -57,6 +65,12 @@ public partial class Home
         "Failed" => "danger",
         _ => "neutral",
     };
+    private bool DeviceUnavailable => _connectionLost || _state?.Device is not { IsConnected: true, IsConnecting: false };
+    private LengthUnit Unit => Options.Value.LengthUnit;
+    private string LengthUnitLabel => Unit is LengthUnit.Inches ? "\"" : "cm";
+    private string LengthStep => Unit is LengthUnit.Inches ? "0.25" : "0.5";
+    private string RailLengthText => LengthText(Options.Value.RailLengthCm);
+    private string AttachmentLengthText => LengthText(_attachmentLengthCm);
 
     /// <summary>
     /// Cancels and awaits polling before releasing the control connection.
@@ -80,13 +94,19 @@ public partial class Home
         GC.SuppressFinalize(this);
     }
 
-    protected override void OnInitialized() => _notice = new(Time);
+    protected override void OnInitialized()
+    {
+        _notice = new(Time);
+        _attachmentLengthCm = ClampAttachmentLength(DefaultAttachmentLengthCm);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             _module = await Js.InvokeAsync<IJSObjectReference>("import", "./admin.js");
+            _attachmentLengthCm = ClampAttachmentLength(await _module.InvokeAsync<double>("readAttachmentLength", _attachmentLengthCm));
+            StateHasChanged();
             _pollingTask = PollAsync();
         }
         if (_module is not null)
@@ -133,6 +153,22 @@ public partial class Home
     private Task EndGuest() => RunAsync(Control.EndGuestAsync, "Guest session ended.", safety: true);
     private Task Connect() => RunAsync(Control.ConnectAsync, null, confirmConnection: true);
 
+    private async Task SetAttachmentLength(ChangeEventArgs args)
+    {
+        if (!double.TryParse(args.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var entered)
+            || !double.IsFinite(entered))
+            return;
+        _attachmentLengthCm = ClampAttachmentLength(Unit is LengthUnit.Inches ? entered * CentimetresPerInch : entered);
+        if (_module is not null)
+            await _module.InvokeVoidAsync("writeAttachmentLength", _attachmentLengthCm);
+    }
+
+    private double ClampAttachmentLength(double centimetres) =>
+        double.IsFinite(centimetres) ? Math.Clamp(centimetres, 0, Options.Value.RailLengthCm) : 0;
+
+    private string LengthText(double centimetres) =>
+        (Unit is LengthUnit.Inches ? centimetres / CentimetresPerInch : centimetres).ToString("0.##", CultureInfo.InvariantCulture);
+
     private async Task Copy()
     {
         if (_module is null || _state is null)
@@ -177,7 +213,10 @@ public partial class Home
         }
         catch (ApiClientException error)
         {
-            _notice.Show($"The action was rejected ({error.Code}).", true);
+            if (error.Code == ControlResponseCodes.DeviceNotConnected)
+                _notice.Show(null);
+            else
+                _notice.Show($"The action was rejected ({error.Code}).", true);
         }
         finally
         {

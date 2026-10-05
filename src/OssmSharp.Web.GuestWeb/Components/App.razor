@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base href="/" />
-    <link rel="stylesheet" href="@Assets["_content/RetroWebUi.Blazor/widgets/theme.css"]" />
     <link rel="stylesheet" href="_content/OssmSharp.Web.Common/controls.css" />
     @* Keep an app-owned sibling after HeadOutlet; extensions can remove trailing injected nodes. *@
     <HeadOutlet @rendermode="InteractiveServer" />
     <link rel="stylesheet" href="guest.css" />
 </head>
-<body class="rw-theme" data-rw-theme="neon">
+<body>
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js" autostart="false"></script>
     <script id="guest-start" type="module" src="@Assets["guest-start.js"]"

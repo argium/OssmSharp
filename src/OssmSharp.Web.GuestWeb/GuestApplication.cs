@@ -26,7 +26,7 @@ public static class GuestApplication
 
         var app = builder.Build();
         app.UseWebSockets();
-        app.UseGuestAccessPolicy(app.Services.GetRequiredService<IOptions<GuestOptions>>().Value, RetroWidgetAssets.InlineStyleHashes);
+        app.UseGuestAccessPolicy(app.Services.GetRequiredService<IOptions<GuestOptions>>().Value);
         app.UseStaticFiles();
         app.UseAntiforgery();
         app.MapStaticAssets();

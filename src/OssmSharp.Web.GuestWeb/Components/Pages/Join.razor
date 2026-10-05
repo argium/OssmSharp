@@ -23,7 +23,7 @@ else if (!_joined && !_connectionLost)
 }
 else
 {
-  <div @ref="_root" class="guest-session rw-stack" data-connection-lost="@(_connectionLost ? "true" : null)"
+  <div @ref="_root" class="guest-session content-stack" data-connection-lost="@(_connectionLost ? "true" : null)"
        data-device-disconnected="@(_status?.Device is { IsConnected: true, IsConnecting: false } ? null : "true")"
        data-control-waiting="@(_status is { Joined: true, ControlAllowed: false } ? "true" : null)">
     <InlineNotification Variant="danger" Role="alert" data-browser-alert hidden="@(_display.Error is null)">
@@ -35,69 +35,79 @@ else
         @SessionMessage
       </InlineNotification>
     }
-    <div class="guest-interface connection-sensitive device-sensitive rw-stack">
-        <PatternPreview Pattern="@_display.Selected.Pattern" Speed="@_display.Selected.Speed" Stroke="@_display.Selected.Stroke" Depth="@_display.Selected.Depth"
-                        Sensation="@_display.Selected.Sensation"
-                        Animate="@(!_display.PreviewStopped && !_connectionLost && _status?.Device is { IsConnected: true, IsConnecting: false, IsResettingPosition: false })" />
-        <RwCard role="region" aria-label="Requested settings">
-          <div slot="heading" class="rw-card-heading">
+    <div class="content-stack">
+        <div class="guest-controlled connection-sensitive">
+            <PatternPreview Pattern="@_display.Selected.Pattern" Speed="@_display.Selected.Speed" Stroke="@_display.Selected.Stroke" Depth="@_display.Selected.Depth"
+                            Sensation="@_display.Selected.Sensation"
+                            Animate="@(!_display.PreviewStopped && !_connectionLost && _status?.Device is { IsConnected: true, IsConnecting: false, IsResettingPosition: false })" />
+        </div>
+        <section class="widget settings-widget" role="region" aria-label="Requested settings">
+          <div class="widget-heading">
             <h2>Settings</h2>
           </div>
-          <div class="settings-legend">
-            <span><i class="key selected" aria-hidden="true"></i>Selected</span>
-            <span><i class="key sent" aria-hidden="true"></i>Sent</span>
-            <span><i class="key current" aria-hidden="true"></i>Current</span>
+          <div class="guest-controlled connection-sensitive device-sensitive">
+            <div class="pattern-selection">
+              <label for="guest-pattern">Pattern</label>
+              <select id="guest-pattern" data-pattern>
+                <option value="0">Simple stroke</option>
+                <option value="1">Teasing / pounding</option>
+                <option value="2">Robo stroke</option>
+                <option value="3">Half / half</option>
+                <option value="4">Deeper</option>
+                <option value="5">Stop / go</option>
+                <option value="6">Insist</option>
+              </select>
+            </div>
+            <div class="slider-grid">
+              <VerticalSlider Name="speed" Label="Speed" Maximum="100" InitialValue="0"
+                              SelectedValue="@_display.Selected.Speed" SentValue="@_display.Sent?.Speed" CurrentValue="@DeviceSpeed" />
+              <VerticalSlider Name="stroke" Label="Stroke" Minimum="0" Maximum="100" InitialValue="10"
+                              SelectedValue="@_display.Selected.Stroke" SentValue="@_display.Sent?.Stroke"
+                              CurrentValue="@_status?.Device?.Stroke" />
+              <VerticalSlider Name="depth" Label="Depth" Minimum="0" Maximum="100" InitialValue="20"
+                              SelectedValue="@_display.Selected.Depth" SentValue="@_display.Sent?.Depth"
+                              CurrentValue="@_status?.Device?.Depth" />
+              <VerticalSlider Name="sensation" Label="Sensation" Maximum="100" InitialValue="50"
+                              SelectedValue="@_display.Selected.Sensation" SentValue="@_display.Sent?.Sensation"
+                              CurrentValue="@_status?.Device?.Sensation" />
+            </div>
           </div>
-          <div class="pattern-selection">
-            <label for="guest-pattern">Pattern</label>
-            <select id="guest-pattern" class="rw-select" data-pattern>
-              <option value="0">Simple stroke</option>
-              <option value="1">Teasing / pounding</option>
-              <option value="2">Robo stroke</option>
-              <option value="3">Half / half</option>
-              <option value="4">Deeper</option>
-              <option value="5">Stop / go</option>
-              <option value="6">Insist</option>
-            </select>
-          </div>
-          <div class="slider-grid">
-            <VerticalSlider Name="speed" Label="Speed" Maximum="100" InitialValue="0"
-                            SelectedValue="@_display.Selected.Speed" SentValue="@_display.Sent?.Speed" CurrentValue="@DeviceSpeed" />
-            <VerticalSlider Name="stroke" Label="Stroke" Minimum="0" Maximum="100" InitialValue="10"
-                            SelectedValue="@_display.Selected.Stroke" SentValue="@_display.Sent?.Stroke"
-                            CurrentValue="@_status?.Device?.Stroke" />
-            <VerticalSlider Name="depth" Label="Depth" Minimum="0" Maximum="100" InitialValue="20"
-                            SelectedValue="@_display.Selected.Depth" SentValue="@_display.Sent?.Depth"
-                            CurrentValue="@_status?.Device?.Depth" />
-            <VerticalSlider Name="sensation" Label="Sensation" Maximum="100" InitialValue="50"
-                            SelectedValue="@_display.Selected.Sensation" SentValue="@_display.Sent?.Sensation"
-                            CurrentValue="@_status?.Device?.Sensation" />
-          </div>
-          <div slot="footer" class="card-footer">
+          <div class="card-footer">
             <div class="send-bar">
+              <div class="settings-legend">
+                <span><i class="key selected" aria-hidden="true"></i>Selected</span>
+                <span><i class="key sent" aria-hidden="true"></i>Sent</span>
+                <span><i class="key current" aria-hidden="true"></i>Current</span>
+              </div>
               <div class="send-options">
                 @if (Ready)
                 {
                   <p data-send-status class="send-status" role="status">@_display.Status</p>
                 }
-                <rw-toggle class="auto-send">
-                  <input slot="control" id="guest-auto-send" type="checkbox" data-auto-send disabled="@(!Ready)" />
-                  <label slot="label" for="guest-auto-send">Auto send</label>
-                </rw-toggle>
+                <div class="auto-send">
+                  <label class="switch-label" for="guest-auto-send">
+                    <input id="guest-auto-send" type="checkbox" role="switch" data-auto-send disabled="@(!Ready)" />
+                    <span class="switch" aria-hidden="true"></span>
+                    Auto send
+                  </label>
+                </div>
               </div>
-              <RwButton Type="button" Variant="success" data-send-button Disabled="@(!Ready)" aria-label="Send"
-                        title="Send the selected settings">Send</RwButton>
-              <RwButton Type="button" Variant="secondary" data-reset-position-button
-                        Disabled="@(!Ready || _status?.Device?.IsResettingPosition == true)" title="Retract fully, then stop">Reset Position</RwButton>
-              <RwButton Type="button" Variant="danger" data-stop-button Disabled="@_connectionLost" aria-label="Stop"
-                        title="Stop motion and pause control">Stop</RwButton>
+              <button type="button" class="button secondary" data-reset-position-button
+                      disabled="@(!Ready || _status?.Device?.IsResettingPosition == true)"
+                      title="Retract fully, then stop">Reset Position</button>
+              <div class="send-actions">
+                <button type="button" class="button success" data-send-button disabled="@(!Ready)" aria-label="Send"
+                        title="Send the selected settings">Send</button>
+                <button type="button" class="button danger" data-stop-button disabled="@_connectionLost" aria-label="Stop"
+                        title="Stop motion and pause control">Stop</button>
+              </div>
             </div>
           </div>
-        </RwCard>
-        <div class="rw-actions">
-          <RwButton Type="button" Variant="secondary" OnClick="LeaveAsync" Disabled="@(_leaving || _connectionLost)"
-                    aria-label="Leave session" title="Stop control and leave this session">Leave session</RwButton>
-        </div>
+        </section>
+      </div>
+      <div class="page-actions">
+        <button type="button" class="button secondary" @onclick="LeaveAsync" disabled="@(_leaving || _connectionLost)"
+                aria-label="Leave session" title="Stop control and leave this session">Leave session</button>
       </div>
     </div>
   }

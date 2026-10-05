@@ -1,6 +1,7 @@
-<RwAlert class="@NotificationClass" Variant="@Variant" role="@Role" @attributes="AdditionalAttributes">
-    @ChildContent
-</RwAlert>
+<div class="@NotificationClass" role="@Role" @attributes="AdditionalAttributes">
+    <span class="notice-icon" aria-hidden="true">@Icon</span>
+    <div class="notice-content">@ChildContent</div>
+</div>
 
 @code {
     [Parameter] public string Variant { get; set; } = "info";
@@ -10,6 +11,12 @@
     [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
 
     private string NotificationClass => string.IsNullOrWhiteSpace(CssClass)
-        ? "rw-inline-notification"
-        : $"rw-inline-notification {CssClass}";
+        ? $"inline-notification {Variant}"
+        : $"inline-notification {Variant} {CssClass}";
+    private string Icon => Variant switch
+    {
+        "success" => "✓",
+        "warning" or "danger" => "!",
+        _ => "i",
+    };
 }

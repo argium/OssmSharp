@@ -20,6 +20,19 @@ public sealed class AdminOptions : IValidatableObject
     [Url]
     public string GuestHostname { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets the usable rail travel, in centimetres, from 1 through 500. The attachment length is
+    /// entered against this value, which only affects the illustration on the user control page.
+    /// </summary>
+    [Range(1, 500)]
+    public double RailLengthCm { get; set; } = 40;
+
+    /// <summary>
+    /// Gets or sets the unit used to enter and display lengths on the user control page. Lengths remain
+    /// configured in centimetres; this choice only changes how they are entered and shown.
+    /// </summary>
+    public LengthUnit LengthUnit { get; set; } = LengthUnit.Centimetres;
+
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

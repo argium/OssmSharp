@@ -25,32 +25,42 @@
       }
       <div class="user-grid connection-sensitive"
            data-device-disconnected="@(_state.Device is { IsConnected: true, IsConnecting: false } ? null : "true")">
-        <RwCard class="user-status device-sensitive" data-testid="user-controls" role="region"
-                aria-labelledby="controls-heading">
-          <div slot="heading" class="rw-card-heading user-status-heading">
+        <section class="widget user-status device-sensitive" data-testid="user-controls" role="region"
+                 aria-labelledby="controls-heading">
+          <div class="widget-heading user-status-heading">
             <h2 id="controls-heading">Controls</h2>
-            <RwBadge Variant="@GuestVariant" data-testid="guest-status">@GuestStatus</RwBadge>
+            <span class="status-mark @GuestVariant" data-testid="guest-status">
+              <i class="dot"></i>@GuestStatus
+            </span>
           </div>
-          <div class="rw-actions">
-            <RwButton Type="button" Variant="success" Disabled="@(_busy || _safetyBusy || _state.Device is { IsResettingPosition: true } || !_state.GuestJoined)"
-                      OnClick="AllowGuest">
+          <div class="button-row">
+            <button type="button" class="button success"
+                    disabled="@(_busy || _safetyBusy || DeviceUnavailable || _state.Device is { IsResettingPosition: true } || !_state.GuestJoined)"
+                    @onclick="AllowGuest">
               Allow control
-            </RwButton>
-            <RwButton Type="button" Variant="danger" Disabled="@_safetyBusy" OnClick="Stop">Stop</RwButton>
-            <RwButton Type="button" Variant="secondary" data-reset-position-button
-                      Disabled="@(_busy || _safetyBusy || _state.Device is not { IsConnected: true, IsConnecting: false, IsResettingPosition: false })"
-                      OnClick="ResetPosition">Reset Position</RwButton>
-            <RwButton Type="button" Variant="danger" Disabled="@(_safetyBusy || !_state.GuestJoined)" OnClick="EndGuest">
+            </button>
+            <button type="button" class="button danger" disabled="@(_safetyBusy || DeviceUnavailable)" @onclick="Stop">Stop</button>
+            <button type="button" class="button secondary" data-reset-position-button
+                    disabled="@(_busy || _safetyBusy || DeviceUnavailable || _state.Device is { IsResettingPosition: true })"
+                    @onclick="ResetPosition">Reset Position</button>
+            <button type="button" class="button danger" disabled="@(_safetyBusy || DeviceUnavailable || !_state.GuestJoined)" @onclick="EndGuest">
               End guest
-            </RwButton>
+            </button>
           </div>
-        </RwCard>
-        <RwCard data-testid="device-connection" role="region" aria-labelledby="connection-heading">
-          <div slot="heading" class="rw-card-heading user-status-heading">
+          <div class="attachment-field">
+            <label for="attachment-length">Attachment length</label>
+            <input id="attachment-length" type="number" inputmode="decimal" data-testid="attachment-length"
+                   min="0" max="@RailLengthText" step="@LengthStep" aria-describedby="attachment-length-unit"
+                   disabled="@DeviceUnavailable" value="@AttachmentLengthText" @oninput="SetAttachmentLength" />
+            <span id="attachment-length-unit" class="field-unit">@LengthUnitLabel (rail @RailLengthText @LengthUnitLabel)</span>
+          </div>
+        </section>
+        <section class="widget" data-testid="device-connection" role="region" aria-labelledby="connection-heading">
+          <div class="widget-heading user-status-heading">
             <h2 id="connection-heading">Device connection</h2>
-            <RwBadge Variant="@ConnectionVariant" data-testid="device-connection-status" role="status">
-              @ConnectionStatus
-            </RwBadge>
+            <span class="status-mark @ConnectionVariant" data-testid="device-connection-status" role="status">
+              <i class="dot"></i>@ConnectionStatus
+            </span>
           </div>
           <dl class="connection-details">
             <div>
@@ -69,27 +79,26 @@
               </dd>
             </div>
           </dl>
-          <RwButton Type="button" Variant="secondary"
-                    Disabled="@(_busy || _safetyBusy || _state.Device is { IsConnecting: true } or { IsConnected: true })"
-                    OnClick="Connect">Connect device</RwButton>
-        </RwCard>
-        <RwCard class="device-sensitive" data-testid="guest-invitation-card" role="region"
-                aria-labelledby="invite-heading">
-          <div slot="heading" class="rw-card-heading">
+          <button type="button" class="button secondary"
+                  disabled="@(_busy || _safetyBusy || _connectionLost || _state.Device is { IsConnecting: true } or { IsConnected: true })"
+                  @onclick="Connect">Connect device</button>
+        </section>
+        <section class="widget device-sensitive" data-testid="guest-invitation-card" role="region"
+                 aria-labelledby="invite-heading">
+          <div class="widget-heading">
             <h2 id="invite-heading">Invite a guest</h2>
           </div>
-          <div class="invite-row rw-controls-row">
-            <rw-input>
-              <input slot="control" id="guest-invitation" type="text" aria-label="Guest invitation"
-                     data-testid="invitation-link" readonly value="@InvitationText" />
-            </rw-input>
-            <RwButton class="rw-feedback-button" Type="button" Variant="@(_notice.IsCopied ? "success" : "secondary")"
-                      OnClick="Copy" aria-label="@_notice.CopyLabel">@_notice.CopyLabel</RwButton>
+          <div class="invite-row">
+            <input id="guest-invitation" type="text" aria-label="Guest invitation"
+                   data-testid="invitation-link" readonly disabled="@DeviceUnavailable" value="@InvitationText" />
+            <button class="button @(_notice.IsCopied ? "success" : "secondary")" type="button" disabled="@DeviceUnavailable"
+                    @onclick="Copy" aria-label="@_notice.CopyLabel">@_notice.CopyLabel</button>
           </div>
-        </RwCard>
+        </section>
         <PatternPreview Title="Last settings" Pattern="@_state.Device?.TransmittedSettings?.Pattern"
                         Speed="@_state.Device?.TransmittedSettings?.Speed" Stroke="@_state.Device?.TransmittedSettings?.Stroke"
                         Depth="@_state.Device?.TransmittedSettings?.Depth" Sensation="@_state.Device?.TransmittedSettings?.Sensation"
+                        AttachmentLength="@_attachmentLengthCm" RailLength="@Options.Value.RailLengthCm"
                         Animate="@(!_previewStopped && !_connectionLost && _state.Device is { IsConnected: true, IsConnecting: false, IsResettingPosition: false })" />
       </div>
     }

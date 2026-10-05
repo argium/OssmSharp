@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
@@ -94,22 +93,19 @@ public static class BuilderExtensions
     /// </summary>
     /// <param name="app">The local web application's middleware pipeline.</param>
     /// <param name="port">The port expected in the loopback host and origin.</param>
-    /// <param name="styleHashes">Canonical Base64 SHA-256 hashes of inline styles permitted by the content security policy.</param>
-    /// <exception cref="ArgumentException">A style hash is not a canonical Base64 SHA-256 digest.</exception>
-    public static void UseLocalAccessPolicy(this IApplicationBuilder app, int port, IReadOnlyList<string>? styleHashes = null)
-        => UseAccessPolicy(app, port, null, styleHashes);
+    public static void UseLocalAccessPolicy(this IApplicationBuilder app, int port)
+        => UseAccessPolicy(app, port, null);
 
     /// <summary>
     /// Allows local access and access through the configured HTTPS reverse proxy.
     /// </summary>
     /// <param name="app">The guest app's request pipeline.</param>
     /// <param name="options">The validated guest port and public URL settings.</param>
-    /// <param name="styleHashes">The allowed SHA-256 style hashes, encoded as canonical Base64.</param>
     /// <remarks>
     /// Trusts <c>X-Forwarded-Proto</c> from one proxy at <c>127.0.0.1</c>.
     /// Forwarded host names, user identities, and client IP addresses are ignored.
     /// </remarks>
-    public static void UseGuestAccessPolicy(this IApplicationBuilder app, GuestOptions options, IReadOnlyList<string>? styleHashes = null)
+    public static void UseGuestAccessPolicy(this IApplicationBuilder app, GuestOptions options)
     {
         var publicOrigin = options.Hostname.Length == 0 ? null : new Uri(options.Hostname).GetLeftPart(UriPartial.Authority);
         if (publicOrigin is not null)
@@ -124,25 +120,16 @@ public static class BuilderExtensions
             forwarded.KnownProxies.Add(IPAddress.Loopback);
             app.UseForwardedHeaders(forwarded);
         }
-        UseAccessPolicy(app, options.GuestPort, publicOrigin, styleHashes);
+        UseAccessPolicy(app, options.GuestPort, publicOrigin);
     }
 
-    private static void UseAccessPolicy(IApplicationBuilder app, int port, string? publicOrigin, IReadOnlyList<string>? styleHashes)
+    private static void UseAccessPolicy(IApplicationBuilder app, int port, string? publicOrigin)
     {
-        var styles = new StringBuilder("'self'");
-        Span<byte> digest = stackalloc byte[32];
-        foreach (var hash in styleHashes ?? [])
-        {
-            if (hash is not { Length: 44 } || !Convert.TryFromBase64String(hash, digest, out var written) ||
-                written != digest.Length || Convert.ToBase64String(digest) != hash)
-                throw new ArgumentException("Only canonical SHA-256 style hashes are accepted.", nameof(styleHashes));
-            styles.Append(" 'sha256-").Append(hash).Append('\'');
-        }
         app.UseExceptionHandler();
         var host = $"127.0.0.1:{port}";
         var origin = $"http://{host}";
         var publicHost = publicOrigin is null ? null : new Uri(publicOrigin).Authority;
-        var policy = $"default-src 'self'; script-src 'self'; style-src {styles}; connect-src 'self' ws://{host}; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
+        var policy = $"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' ws://{host}; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'";
         var publicPolicy = publicOrigin is null ? null : policy.Replace($"ws://{host}", $"wss://{publicHost}", StringComparison.Ordinal);
         app.Use(async (context, next) =>
         {

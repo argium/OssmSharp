@@ -4,9 +4,6 @@
       "path": ".",
     },
     {
-      "path": "../retro-webui",
-    },
-    {
       "path": "../ossm-rs",
     },
   ],

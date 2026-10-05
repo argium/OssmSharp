@@ -211,6 +211,21 @@ test("Reset Position completion and remote reset keep preview paused until delib
   browser.guest.dispose();
 });
 
+test("positive device recovery resumes the selected preview without sending settings", async () => {
+  const browser = await createGuest();
+  browser.guest.updateState({ joined: true, ready: false });
+  await setImmediate();
+  assert.equal(browser.calls("UpdateDisplay").at(-1).payload.previewStopped, true);
+  assert.equal(browser.element('[data-input="speed"]').value, "0");
+
+  browser.guest.updateState({ joined: true, ready: true });
+  await setImmediate();
+  assert.equal(browser.calls("UpdateDisplay").at(-1).payload.previewStopped, false);
+  assert.equal(browser.calls("SubmitSettings").length, 0);
+  assert.equal(browser.element("[data-send-button]").disabled, false);
+  browser.guest.dispose();
+});
+
 test("stale settings timeout cannot erase reset selection or hide reset failure", async () => {
   let completeRequest;
   let completeReset;

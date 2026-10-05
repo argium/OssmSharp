@@ -1,72 +1,112 @@
-.settings-legend { display: flex; flex-wrap: wrap; gap: 1rem; color: var(--rw-muted); font-size: .75rem; }
+.settings-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    color: var(--muted);
+    font-size: .75rem;
+}
 .key { display: inline-block; width: .6rem; height: .6rem; margin-inline-end: .35rem; vertical-align: middle; }
-.key.selected { background: var(--rw-primary); border-radius: 50%; }
-.key.sent { height: 0; border-top: 2px dashed var(--rw-warning); }
-.key.current { height: 0; border-top: 2px solid var(--rw-success); }
-.pattern-selection { display: grid; gap: .3rem; margin-block: .8rem; }
-.pattern-selection select { width: 100%; min-width: 0; padding: .4rem .6rem; font: inherit; color: var(--rw-text); background: var(--rw-background); border: 1px solid var(--rw-border); }
-.pattern-selection select:focus-visible { outline: 2px solid var(--rw-focus); outline-offset: 3px; }
-.slider-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
-.vertical-slider { text-align: center; min-width: 0; }
-.slider-heading { display: grid; gap: .3rem; }
-.slider-heading label { font-weight: 700; font-size: .9rem; }
-.slider-heading output { color: var(--rw-primary); font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.key.selected { border-radius: 50%; background: var(--accent); }
+.key.sent { height: 0; border-top: 2px dashed var(--warning); }
+.key.current { height: 0; border-top: 2px solid var(--success); }
 
+.pattern-selection { display: grid; gap: 9px; margin-block: 24px; }
+.pattern-selection label { font-size: 12px; font-weight: 500; }
+.pattern-selection select { width: min(100%, 15rem); }
+.slider-grid { display: flex; gap: 1rem; }
+.vertical-slider { flex: 1 1 0; min-width: 0; text-align: center; }
+/* Sensation has no effect on a simple stroke, so guest-session.js reveals it only for the
+   patterns that use it. The hidden input keeps its value and stays in the submitted request. */
+.guest-session:not([data-sensation]) .vertical-slider[data-slider="sensation"] { display: none; }
+.slider-heading { display: grid; gap: .3rem; }
+.slider-heading label { font-size: .9rem; font-weight: 700; }
+.slider-heading output {
+    color: var(--accent);
+    font-size: 2rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
 .slider-well {
     height: clamp(150px, 28vh, 240px);
+    margin: 1rem auto;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: .45rem;
-    margin: 1rem auto;
 }
-
 .slider-markers { width: 26px; height: calc(100% - 1.25rem); overflow: visible; flex-shrink: 0; }
 .current-marker, .sent-marker { stroke-width: 2; vector-effect: non-scaling-stroke; }
-.current-marker { stroke: var(--rw-success); }
-.sent-marker { stroke: var(--rw-warning); stroke-dasharray: 3 2; }
-
-.rw-slider.vertical-range {
+.current-marker { stroke: var(--success); }
+.sent-marker { stroke: var(--warning); stroke-dasharray: 3 2; }
+.vertical-range {
+    --range-progress: 0%;
+    appearance: none;
     writing-mode: vertical-lr;
     direction: rtl;
     width: 2.75rem;
     height: 100%;
     flex-shrink: 0;
+    margin: 0;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--field);
+    box-shadow: var(--small-inset);
+    cursor: pointer;
+    accent-color: var(--accent);
 }
-
-.rw-slider.vertical-range::-webkit-slider-runnable-track { width: .5rem; height: 100%; }
-.rw-slider.vertical-range::-moz-range-track { width: .5rem; height: 100%; }
-.rw-slider.vertical-range::-webkit-slider-thumb {
+.vertical-range::-webkit-slider-runnable-track { width: .5rem; height: 100%; }
+.vertical-range::-moz-range-track { width: .5rem; height: 100%; }
+.vertical-range::-webkit-slider-thumb {
+    appearance: none;
+    width: 25px;
+    height: 25px;
     margin-top: 0;
     margin-left: calc((.5rem - 1.25rem) / 2 - 1px);
+    border: 5px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent-fill);
+    box-shadow: var(--control-shadow), 0 0 0 1px var(--line);
 }
-
-.setting-values { display: grid; gap: .3rem; font-size: .75rem; color: var(--rw-muted); }
-[data-sent] { color: var(--rw-warning); font-variant-numeric: tabular-nums; }
-.vertical-slider[data-state="sent"] .slider-heading output { color: var(--rw-warning); }
-main:focus { outline: none; }
-
+.vertical-range::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: 5px solid var(--surface);
+    border-radius: 50%;
+    background: var(--accent-fill);
+    box-shadow: var(--control-shadow), 0 0 0 1px var(--line);
+}
+.setting-values { display: grid; gap: .3rem; color: var(--muted); font-size: .75rem; }
+[data-sent] { color: var(--warning); font-variant-numeric: tabular-nums; }
+.vertical-slider[data-state="sent"] .slider-heading output { color: var(--warning); }
+.card-footer { display: grid; gap: 1rem; margin-top: 28px; }
 .send-bar { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .8rem; }
-.send-options { display: flex; flex: 1 1 20rem; justify-content: space-between; align-items: center; gap: .8rem; }
-.auto-send { flex: 0 0 auto; grid-template-columns: max-content max-content; white-space: nowrap; }
-.send-status { color: var(--rw-muted); font-size: .8rem; margin-inline-end: auto; }
+.send-options { display: flex; flex: 1 1 20rem; justify-content: flex-end; align-items: center; gap: .8rem; }
+.auto-send { display: flex; align-items: center; flex: 0 0 auto; white-space: nowrap; }
+.send-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 15px; }
+.settings-legend { flex: 0 0 auto; margin-inline-end: auto; }
+.guest-session .page-actions { justify-content: flex-start; }
+.send-status { margin-inline-end: auto; color: var(--muted); font-size: .8rem; }
 
-.guest-session[data-connection-lost] .guest-session-message { display: none; }
+.guest-session[data-connection-lost] .guest-session-message,
 .guest-session[data-connection-lost] [data-browser-alert] { display: none; }
 main > [data-testid="guest-disconnected"] { display: none; }
-html[data-guest-connection-lost] main > [data-testid="guest-disconnected"] { display: block; }
-html[data-guest-connection-lost] main > .rw-inline-notification:not([data-testid="guest-disconnected"]),
-html[data-guest-connection-lost] .rw-connection-notice,
-html[data-guest-connection-lost] .rw-fatal-notice { display: none !important; }
+html[data-guest-connection-lost] main > [data-testid="guest-disconnected"] { display: flex; }
+html[data-guest-connection-lost] main > .inline-notification:not([data-testid="guest-disconnected"]),
+html[data-guest-connection-lost] .connection-notice,
+html[data-guest-connection-lost] #blazor-error-ui.fatal-notice { display: none !important; }
 
-@media (max-width: 520px) {
+@media (max-width: 700px) {
     .slider-grid { gap: .45rem; }
     .slider-well { height: clamp(150px, 24vh, 210px); gap: .15rem; }
     .slider-markers { width: 18px; }
+    .send-options { flex-basis: 100%; }
 }
 
 @media (forced-colors: active) {
     .key.selected { background: Highlight; }
     .key.sent, .key.current { border-color: CanvasText; }
     .current-marker, .sent-marker { stroke: CanvasText; }
+    .vertical-range { background: Canvas; border-color: CanvasText; }
+    .vertical-range::-webkit-slider-thumb { background: ButtonText; border-color: Canvas; }
+    .vertical-range::-moz-range-thumb { background: ButtonText; border-color: Canvas; }
 }

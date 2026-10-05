@@ -1,14 +1,33 @@
-.user-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 1rem; }
-.user-grid > rw-card { min-width: 0; }
-.user-grid > rw-card::part(card) { height: 100%; }
-.user-status-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem; }
-.user-status-heading rw-badge { margin-left: auto; }
-.invite-row rw-input { flex: 1 1 12rem; min-width: 0; }
-.connection-details { display: grid; gap: .5rem; }
-.connection-details dt { color: var(--rw-muted); font-size: .85rem; }
-.connection-details dd { margin: 0; overflow-wrap: anywhere; }
+.user-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 32px;
+}
+
+.user-status-heading { flex-wrap: wrap; }
+.user-status-heading .status-mark { margin-left: auto; }
+.invite-row { display: flex; align-items: center; gap: 14px; }
+.invite-row input { flex: 1 1 12rem; }
+.attachment-field { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 24px; font-size: .85rem; }
+.attachment-field label { font-weight: 550; }
+.attachment-field input { flex: 0 1 7rem; font-variant-numeric: tabular-nums; }
+.field-unit { color: var(--muted); }
+.connection-details { display: grid; gap: 14px; margin: 0 0 24px; }
+.connection-details > div {
+    padding: 14px 16px;
+    border-radius: 10px;
+    background: var(--field);
+    box-shadow: var(--inset);
+}
+.connection-details dt { color: var(--muted); font-size: .78rem; }
+.connection-details dd { margin: 3px 0 0; overflow-wrap: anywhere; font-weight: 550; }
 [data-testid="device-duration"] { font-variant-numeric: tabular-nums; }
 
-@media (max-width: 680px) {
-    .user-grid { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+    .user-grid { grid-template-columns: 1fr; gap: 28px; }
+}
+
+@media (max-width: 560px) {
+    .invite-row { align-items: stretch; flex-direction: column; }
 }

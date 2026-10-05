@@ -1,17 +1,34 @@
-<RwCard class="pattern-preview device-sensitive" role="region" aria-label="@Title">
-    <div slot="heading" class="rw-card-heading preview-heading">
+<section class="widget pattern-preview device-sensitive" role="region" aria-label="@Title">
+    <div class="widget-heading preview-heading">
         <h2>@Title</h2>
-        <RwBadge Variant="neutral" data-testid="preview-pattern">@PatternLabel</RwBadge>
+        @if (Pattern is not null)
+        {
+            <span class="status-mark neutral" data-testid="preview-pattern"><i class="dot"></i>@PatternLabel</span>
+        }
     </div>
-    <svg class="preview-rail" viewBox="0 0 200 46" role="img" aria-label="@PreviewLabel">
+    <svg class="preview-rail" viewBox="0 8 200 30" role="img" aria-label="@PreviewLabel">
+        <defs>
+            <clipPath id="@_clipId">
+                <rect x="-20" y="-32" width="@Format(EntryX + 20)" height="120" />
+            </clipPath>
+        </defs>
         <path class="preview-track" d="M5 23H195 M5 15V31 M195 15V31" />
         <path class="preview-ticks" d="M52.5 18V28 M100 18V28 M147.5 18V28" />
         @if (BoundedStroke is not null && BoundedDepth is not null)
         {
             <rect class="preview-range" x="@RangeStart" y="18" width="@RangeWidth" height="10" rx="2" />
+            <g clip-path="url(#@_clipId)" aria-hidden="true">
+                <rect class="preview-attachment" x="@AttachmentX" y="19" width="@AttachmentWidth" height="8" rx="4">
+                    @if (ShowAnimation)
+                    {
+                        <animate attributeName="x" values="@AttachmentValues" keyTimes="@AnimationTimes" calcMode="spline"
+                                 keySplines="@AnimationSplines" dur="@AnimationDuration" repeatCount="indefinite" />
+                    }
+                </rect>
+                <rect class="preview-attachment-still" x="@AttachmentX" y="19" width="@AttachmentWidth" height="8" rx="4" />
+            </g>
             <path class="preview-carriage" d="@CarriagePath" aria-hidden="true">
-                @if (Animate && Speed > 0 && double.IsFinite(Speed.Value) && End > Start && Pattern is >= 0 and <= 6
-                    && (Pattern == 0 || BoundedSensation is not null) && _positions.Distinct().Count() > 1)
+                @if (ShowAnimation)
                 {
                     <animate attributeName="d" values="@AnimationValues" keyTimes="@AnimationTimes" calcMode="spline"
                              keySplines="@AnimationSplines" dur="@AnimationDuration" repeatCount="indefinite" />
@@ -20,10 +37,16 @@
             <path class="preview-still" d="@CarriagePath" aria-hidden="true" />
         }
     </svg>
-    <div class="preview-ends"><span>Back</span><span>Front / person</span></div>
-</RwCard>
+</section>
 
 @code {
+    /// <summary>The distance along the rail, in user units, at which the seated person is reached.</summary>
+    private const double EntryX = 188;
+    /// <summary>User units per percent of rail travel.</summary>
+    private const double Scale = 1.66;
+
+    private readonly string _clipId = $"preview-entry-{Guid.NewGuid():N}";
+
     [Parameter] public string Title { get; set; } = "Pattern preview";
     [Parameter] public int? Pattern { get; set; } = 0;
     /// <summary>
@@ -33,6 +56,18 @@
     [Parameter] public int? Stroke { get; set; }
     [Parameter] public int? Depth { get; set; }
     [Parameter] public int? Sensation { get; set; }
+    /// <summary>
+    /// Gets or sets the illustrative attachment length, in centimetres. The attachment is fixed to the
+    /// forward end of the carriage, so a longer attachment reaches the seated person at a lower depth.
+    /// It is drawn against <see cref="RailLength"/> and only affects this illustration.
+    /// </summary>
+    [Parameter] public double AttachmentLength { get; set; } = 24;
+    /// <summary>
+    /// Gets or sets the usable rail travel, in centimetres, that <see cref="AttachmentLength"/> is drawn
+    /// against. An attachment at least this long is drawn across the full travel; a rail length of zero
+    /// or less draws no attachment.
+    /// </summary>
+    [Parameter] public double RailLength { get; set; } = 40;
     [Parameter] public bool Animate { get; set; } = true;
 
     private string PatternLabel => Pattern switch
@@ -43,20 +78,28 @@
     private int? BoundedStroke => Bound(Stroke);
     private int? BoundedDepth => Bound(Depth);
     private int? BoundedSensation => Bound(Sensation);
-    private double Start => 17 + Math.Max(0, BoundedDepth!.Value - BoundedStroke!.Value) * 1.66;
-    private double End => 17 + BoundedDepth!.Value * 1.66;
+    private double Start => 17 + Math.Max(0, BoundedDepth!.Value - BoundedStroke!.Value) * Scale;
+    private double End => 17 + BoundedDepth!.Value * Scale;
     private double Mid => (Start + End) / 2;
     private string RangeStart => Format(Start);
     private string RangeWidth => Format(Math.Max(1, End - Start));
-    private string CarriagePath => Shape((Pattern == 6 ? Start + _positions[0] * (End - Start) : Mid) - 12);
+    private double CarriageX => (Pattern == 6 ? Start + _positions[0] * (End - Start) : Mid) - 12;
+    private string CarriagePath => Shape(CarriageX);
+    private string AttachmentX => Format(CarriageX + 17);
+    private string AttachmentWidth => Format(AttachmentTravel * 100 * Scale);
+    /// <summary>The attachment length as a fraction of the full rail travel.</summary>
+    private double AttachmentTravel => RailLength > 0 && double.IsFinite(RailLength) && double.IsFinite(AttachmentLength)
+        ? Math.Clamp(AttachmentLength / RailLength, 0, 1)
+        : 0;
     private double[] _positions = [0, 1, 0];
     private double[] _times = [0, .5, 1];
     private double _cycles = 1;
-    private string AnimationValues => string.Join(';', _positions.Select(position => Shape(Start + position * (End - Start) - 12)));
+    private bool ShowAnimation => Animate && Speed > 0 && double.IsFinite(Speed.Value) && End > Start
+        && Pattern is >= 0 and <= 6 && (Pattern == 0 || BoundedSensation is not null) && _positions.Distinct().Count() > 1;
+    private string AnimationValues => string.Join(';', _positions.Select(position => Shape(Travel(position))));
+    private string AttachmentValues => string.Join(';', _positions.Select(position => Format(Travel(position) + 17)));
     private string AnimationTimes => string.Join(';', _times.Select(time => time.ToString("0.######", CultureInfo.InvariantCulture)));
-    private string AnimationSplines => string.Join(';', Enumerable.Repeat(Pattern == 2
-        ? FormattableString.Invariant($"{.5 - BoundedSensation.GetValueOrDefault(50) / 200.0:0.##} 0 {.5 + BoundedSensation.GetValueOrDefault(50) / 200.0:0.##} 1")
-        : ".33 0 .67 1", _positions.Length - 1));
+    private string AnimationSplines => string.Join(';', Enumerable.Repeat(Pattern == 2 ? "0 0 1 1" : ".33 0 .67 1", _positions.Length - 1));
     private string AnimationDuration => FormattableString.Invariant($"{40 * _cycles / Speed:0.####}s");
     private string PreviewLabel => $"{PatternLabel} preview at {Value(Speed)} speed, {Value(BoundedStroke)} stroke, {Value(BoundedDepth)} depth, and {Value(BoundedSensation)} sensation";
 
@@ -72,6 +115,11 @@
         {
             case 1:
                 _times = [0, insertionTime, 1];
+                break;
+            case 2:
+                var dwell = .05 + sensation / 100.0 * .2;
+                _positions = [0, 1, 1, 0, 0];
+                _times = [0, .5 - dwell, .5, 1 - dwell, 1];
                 break;
             case 3:
                 _positions = [0, .5, 0, 1, 0];
@@ -112,6 +160,7 @@
         }
     }
 
+    private double Travel(double position) => Start + position * (End - Start) - 12;
     private static int? Bound(int? value) => value is { } known ? Math.Clamp(known, 0, 100) : null;
     private static string Shape(double position) => $"M{Format(position)} 16H{Format(position + 17)}A7 7 0 0 1 {Format(position + 17)} 30H{Format(position)}Z";
     private static string Value(double? value) => value is { } known ? FormattableString.Invariant($"{known}%") : "Unknown";

@@ -548,8 +548,6 @@ async function requestGuestStop(page, session) {
 }
 
 for (const [pendingCommand, method, label] of [
-  ["Connect", "Stop", "Stop"],
-  ["Connect", "EndGuest", "End guest"],
   ["AllowGuest", "Stop", "Stop"],
   ["AllowGuest", "EndGuest", "End guest"],
 ]) {
@@ -559,7 +557,7 @@ for (const [pendingCommand, method, label] of [
     async () => {
       const adminOrigin = await getAdminOrigin();
       const context = await browser.newContext();
-      adminSession = newAdminSession();
+      adminSession = newAdminSession(userState(deviceState({ isConnected: true })));
       const waitForCommand = async (name) => {
         const received = adminSession.received.get(name);
         const deadline = setTimeout(
@@ -664,6 +662,15 @@ async function selectSpeed(page, value) {
   }, value);
 }
 
+async function enabledControlsInGreyscale(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll(".guest-controlled")]
+      .filter((region) => getComputedStyle(region).filter !== "none")
+      .flatMap((region) => [...region.querySelectorAll("button, input, select")])
+      .filter((control) => !control.disabled)
+      .map((control) => control.id || control.className));
+}
+
 async function filtersOnAncestors(locator) {
   return locator.evaluate((element) => {
     const filters = [];
@@ -681,7 +688,7 @@ test("admin Reset Position uses its distinct RPC and keeps Stop available", { ti
   try {
     await page.getByRole("button", { name: "Reset Position", exact: true }).click();
     await adminSession.received.get("ResetPosition").promise;
-    await page.locator("rw-alert.rw-inline-notification").filter({ hasText: "Resetting position ..." }).waitFor();
+    await page.locator(".inline-notification").filter({ hasText: "Resetting position ..." }).waitFor();
     assert.equal(await page.locator(".preview-carriage animate").count(), 0);
     assert.equal(await page.getByRole("button", { name: "Reset Position", exact: true }).isDisabled(), true);
     assert.equal(await page.getByRole("button", { name: "Stop", exact: true }).isEnabled(), true);
@@ -767,9 +774,9 @@ test("admin Stop pauses the last sent preview and shows a yellow stopping notice
     const label = await preview.getAttribute("aria-label");
     await page.getByRole("button", { name: "Stop", exact: true }).click();
     await adminSession.received.get("Stop").promise;
-    const notice = page.locator("rw-alert.rw-inline-notification").filter({ hasText: "Stopping ..." });
+    const notice = page.locator(".inline-notification").filter({ hasText: "Stopping ..." });
     await notice.waitFor();
-    assert.equal(await notice.getAttribute("variant"), "warning");
+    assert.equal(await notice.evaluate((element) => element.classList.contains("warning")), true);
     assert.deepEqual(await filtersOnAncestors(notice), []);
     assert.equal(await page.locator(".preview-carriage animate").count(), 0, "the preview must stop before the command completes");
     assert.equal(await preview.getAttribute("aria-label"), label, "Stop must preserve the last sent selection");
@@ -813,7 +820,7 @@ test("admin connection widget distinguishes unknown, disconnected, connecting an
     assert.equal(await page.getByRole("button", { name: "Reset", exact: true }).count(), 0);
     assert.equal(await page.getByRole("button", { name: "Allow control", exact: true }).count(), 1);
     assert.doesNotMatch(await page.locator("main").innerText(), /Permission expires|Not active|Last known device status|Allow guest/);
-    assert.equal(await page.locator("rw-card rw-card").count(), 0, "widgets must not nest cards");
+    assert.equal(await page.locator(".widget .widget").count(), 0, "widgets must not nest");
     for (const [expected, overrides] of [
       ["Unknown", null],
       ["Disconnected", { isArmed: true }],
@@ -837,8 +844,25 @@ test("admin connection widget distinguishes unknown, disconnected, connecting an
         [],
         "device recovery must remain coloured, including its ancestors",
       );
-      for (const selector of ['[data-testid="user-controls"]', '[data-testid="guest-invitation-card"]', ".pattern-preview"]) {
+      assert.deepEqual(
+        await filtersOnAncestors(page.getByTestId("user-controls")),
+        connected ? [] : ["grayscale(1)"],
+        `${expected}: the controls widget reflects device availability`,
+      );
+      for (const selector of ['[data-testid="guest-invitation-card"]', ".pattern-preview"]) {
         assert.deepEqual(await filtersOnAncestors(page.locator(selector)), connected ? [] : ["grayscale(1)"], `${expected}: ${selector}`);
+      }
+      for (const control of [page.getByTestId("invitation-link"), page.getByRole("button", { name: "Copy", exact: true })]) {
+        assert.equal(await control.isDisabled(), !connected, `${expected}: greyscaled controls must be disabled`);
+      }
+      for (const control of [
+        page.getByRole("button", { name: "Allow control", exact: true }),
+        page.getByRole("button", { name: "Stop", exact: true }),
+        page.getByRole("button", { name: "Reset Position", exact: true }),
+        page.getByRole("button", { name: "End guest", exact: true }),
+        page.getByTestId("attachment-length"),
+      ]) {
+        assert.equal(await control.isDisabled(), !connected, `${expected}: greyscaled controls must be disabled`);
       }
       assert.equal(await page.getByTestId("device-duration").innerText(), "Unknown", "missing connection completion time must not be invented");
       if (expected === "Failed") {
@@ -852,6 +876,16 @@ test("admin connection widget distinguishes unknown, disconnected, connecting an
         }
       }
     }
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
+    await adminSession.received.get("Stop").promise;
+    adminSession.state = userState(deviceState());
+    adminSession.pending.get("Stop")({ accepted: false, code: "device-not-connected" });
+    adminSession.pending.delete("Stop");
+    await page.waitForFunction(() => document.querySelector('[data-testid="device-connection-status"]')?.textContent === "Disconnected");
+    assert.equal(await page.getByRole("button", { name: "Stop", exact: true }).isDisabled(), true);
+    assert.equal(await page.getByText("The action was rejected (device-not-connected).", { exact: true }).count(), 0);
+    assert.equal(await page.locator('[role="alert"]:visible').count(), 0, "a device disconnect is represented by the connection state, not a rejection alert");
+
     adminSession.state = userState(deviceState());
     await page.waitForFunction(() => document.querySelector('[data-testid="device-connection-status"]')?.textContent === "Disconnected");
     await page.getByRole("button", { name: "Connect device", exact: true }).focus();
@@ -1000,7 +1034,7 @@ test("admin requested settings never substitute observed values or defaults for 
   try {
     const preview = page.locator(".preview-rail");
     assert.equal(await preview.getAttribute("aria-label"), "Unknown preview at Unknown speed, Unknown stroke, Unknown depth, and Unknown sensation");
-    assert.equal(await page.getByTestId("preview-pattern").innerText(), "Unknown");
+    assert.equal(await page.getByTestId("preview-pattern").count(), 0, "an unknown pattern must not be labelled");
     assert.equal(await page.locator(".preview-range, .preview-carriage").count(), 0);
     assert.equal(await page.getByRole("heading", { name: "Last settings", exact: true }).count(), 1);
     for (const [settings, expected, range, animation] of [
@@ -1014,16 +1048,14 @@ test("admin requested settings never substitute observed values or defaults for 
       [{ pattern: 5, speed: 28, stroke: 36, depth: 47, sensation: 59 }, ["28%", "36%", "47%", "59%"], 1, 1],
     ]) {
       adminSession.state = userState({ ...adminSession.state.device, transmittedSettings: settings });
-      const patternLabel = settings.pattern === null ? "Unknown" : settings.pattern === 0 ? "Simple stroke" : settings.pattern === 5 ? "Stop / go" : `Pattern ${settings.pattern}`;
-      const label = `${patternLabel} preview at ${expected[0]} speed, ${expected[1]} stroke, ${expected[2]} depth, and ${expected[3]} sensation`;
+      const patternLabel = settings.pattern === null ? null : settings.pattern === 0 ? "Simple stroke" : settings.pattern === 5 ? "Stop / go" : `Pattern ${settings.pattern}`;
+      const label = `${patternLabel ?? "Unknown"} preview at ${expected[0]} speed, ${expected[1]} stroke, ${expected[2]} depth, and ${expected[3]} sensation`;
       await page.waitForFunction((label) => document.querySelector(".preview-rail")?.getAttribute("aria-label") === label, label);
       assert.equal(await preview.getAttribute("aria-label"), label);
       assert.equal(await page.locator(".preview-range").count(), range);
       assert.equal(await page.locator(".preview-carriage animate").count(), animation);
-      assert.equal(
-        await page.getByTestId("preview-pattern").innerText(),
-        patternLabel,
-      );
+      assert.equal(await page.getByTestId("preview-pattern").count(), patternLabel === null ? 0 : 1);
+      if (patternLabel !== null) assert.equal(await page.getByTestId("preview-pattern").innerText(), patternLabel);
     }
     assert.deepEqual(adminSession.calls, [], "displaying transmissions must not issue commands");
     assert.deepEqual(errors, []);
@@ -1033,9 +1065,29 @@ test("admin requested settings never substitute observed values or defaults for 
 });
 
 test("user and guest previews omit stats and user names the last settings", { timeout: 60_000 }, async () => {
-  const admin = await openAdmin(userState(deviceState({ isConnected: true })));
+  const admin = await openAdmin(
+    userState(deviceState({ isConnected: true, transmittedSettings: { pattern: 0, speed: 30, stroke: 40, depth: 60, sensation: 50 } })),
+  );
   try {
+    const length = admin.page.getByTestId("attachment-length");
+    assert.equal(await admin.page.locator('[data-testid="user-controls"] [data-testid="attachment-length"]').count(), 1,
+      "the user sets the attachment length from the controls widget");
     assert.equal(await admin.page.locator(".preview-settings").count(), 0);
+    assert.match(await admin.page.locator("#attachment-length-unit").innerText(), /^cm \(rail 40 cm\)$/,
+      "lengths are measured against the configured rail, not as a percentage");
+    assert.equal(await length.getAttribute("max"), "40", "the attachment cannot exceed the configured rail");
+    assert.equal(await length.inputValue(), "24");
+    const width = () => admin.page.locator(".preview-attachment").evaluate((rect) => Number(rect.getAttribute("width")));
+    const full = (await width()) / 0.6;
+    for (const [entered, expected] of [["10", 0.25], ["40", 1], ["60", 1], ["0", 0]]) {
+      await length.fill(entered);
+      await admin.page.waitForFunction(
+        ([expected, full]) => Math.abs(Number(document.querySelector(".preview-attachment")?.getAttribute("width")) - expected * full) < 0.1,
+        [expected, full],
+      );
+    }
+    assert.doesNotMatch(await admin.page.locator(".pattern-preview").innerText(), /\d|%/,
+      "the preview illustrates motion rather than repeating stats");
     assert.equal(await admin.page.getByRole("heading", { name: "Last settings", exact: true }).count(), 1);
     assert.deepEqual(admin.errors, []);
   } finally {
@@ -1186,6 +1238,8 @@ test("seven guest patterns keep requests and illustrative previews consistent", 
   try {
     const { page, errors } = await openGuest(context, invitation);
     await selectSpeed(page, 50);
+        // Sensation is hidden for a simple stroke, so set it from a pattern that uses it.
+    await page.getByLabel("Pattern", { exact: true }).selectOption("1");
     await page.locator('[data-input="sensation"]').fill("75");
     const labels = ["Simple stroke", "Teasing / pounding", "Robo stroke", "Half / half", "Deeper", "Stop / go", "Insist"];
     const profiles = new Set();
@@ -1195,6 +1249,11 @@ test("seven guest patterns keep requests and illustrative previews consistent", 
       const animation = page.locator(".preview-carriage animate");
       const profile = await animation.evaluate((element) => ["values", "keyTimes", "keySplines", "dur"].map((name) => element.getAttribute(name)));
       profiles.add(JSON.stringify(profile));
+      assert.equal(
+        await page.locator('[data-input="sensation"]').isVisible(),
+        pattern !== 0,
+        "sensation is offered only for the patterns that use it",
+      );
       const values = profile[0].split(";").map((path) => Number(path.match(/^M(-?[\d.]+)/)[1]));
       assert.ok(values.every((value) => value >= 21.6 && value <= 38.2), "motion stays between withdrawal and forward depth");
       if (pattern === 5) {
@@ -1240,9 +1299,9 @@ test("seven guest patterns keep requests and illustrative previews consistent", 
     assert.equal(profiles.size, 7, "representative sensation distinguishes every illustrative pattern");
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      const back = await page.getByText("Back", { exact: true }).boundingBox();
-      const front = await page.getByText("Front / person", { exact: true }).boundingBox();
-      assert.ok(back.x < front.x);
+      const back = await page.getByText("Back", { exact: true }).count();
+      const person = await page.locator(".preview-person").count();
+      assert.deepEqual([back, person], [0, 0], "the preview drops the end labels and the person figure");
       assert.match(await page.locator(".preview-carriage").getAttribute("d"), /^M[\d.]+ 16H[\d.]+A7 7 0 0 1 [\d.]+ 30H[\d.]+Z$/, "the back is flat and the forward end is rounded");
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       if (process.env.GUEST_SCREENSHOT_DIR) {
@@ -1267,8 +1326,10 @@ test("seven guest patterns keep requests and illustrative previews consistent", 
     }
     await page.locator("[data-auto-send]").uncheck();
     const profilesAtBoundary = async (pattern, sensation) => {
-      await page.locator("[data-pattern]").selectOption(String(pattern));
+      // Sensation is hidden for a simple stroke, so set it from a pattern that uses it.
+      await page.locator("[data-pattern]").selectOption("1");
       await page.locator('[data-input="sensation"]').fill(String(sensation));
+      await page.locator("[data-pattern]").selectOption(String(pattern));
       await page.waitForFunction(([label, sensation]) => document.querySelector(".preview-rail")?.getAttribute("aria-label")
         === `${label} preview at 50% speed, 10% stroke, 20% depth, and ${sensation}% sensation`, [labels[pattern], sensation]);
       const animation = page.locator(".preview-carriage animate");
@@ -1454,26 +1515,24 @@ test("auto-send label and send status align at desktop and mobile widths without
   sessions.set(invitation, { state: guestState() });
   try {
     const { page, errors } = await openGuest(context, invitation);
-    assert.equal(await page.locator(".rw-page-header").count(), 0);
+    assert.equal(await page.locator(".page-header").count(), 0);
     assert.equal(await page.getByText("Control enabled.", { exact: true }).count(), 0);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
       const layout = await page.locator(".auto-send").evaluate((toggle) => {
         const label = toggle.querySelector("label");
-        const range = document.createRange();
-        range.selectNodeContents(label);
-        const textBounds = range.getBoundingClientRect();
+        const controlBounds = label.querySelector(".switch").getBoundingClientRect();
         const labelBounds = label.getBoundingClientRect();
         const toggleBounds = toggle.getBoundingClientRect();
         return {
-          labelWidth: labelBounds.width,
-          textWidth: textBounds.width,
-          rightSpace: toggleBounds.right - textBounds.right,
-          toggleWidth: toggleBounds.width,
+          controlInside: controlBounds.left >= labelBounds.left && controlBounds.right <= labelBounds.right,
+          labelInside: labelBounds.left >= toggleBounds.left && labelBounds.right <= toggleBounds.right,
+          hasGap: controlBounds.right < labelBounds.right,
         };
       });
-      assert.ok(layout.labelWidth >= layout.textWidth, JSON.stringify(layout));
-      assert.ok(layout.rightSpace >= 48, "the label must leave room for the switch and its gap: " + JSON.stringify(layout));
+      assert.equal(layout.controlInside, true, JSON.stringify(layout));
+      assert.equal(layout.labelInside, true, JSON.stringify(layout));
+      assert.equal(layout.hasGap, true, JSON.stringify(layout));
       const alignment = await page.locator(".send-bar").evaluate((bar) => {
         const center = (element) => {
           const range = document.createRange();
@@ -1484,6 +1543,21 @@ test("auto-send label and send status align at desktop and mobile widths without
         return { status: center(bar.querySelector("[data-send-status]")), autoSend: center(bar.querySelector(".auto-send label")) };
       });
       assert.ok(Math.abs(alignment.status - alignment.autoSend) <= 1, JSON.stringify(alignment));
+      const row = await page.locator(".send-bar").evaluate((bar) => {
+        const bounds = (selector) => bar.querySelector(selector).getBoundingClientRect();
+        const send = bounds("[data-send-button]");
+        const stop = bounds("[data-stop-button]");
+        return { legendInRow: bar.contains(bar.querySelector(".settings-legend")), gap: stop.left - send.right, stopAfterSend: stop.left >= send.right };
+      });
+      assert.equal(row.legendInRow, true, "the legend shares the row with the send buttons");
+      assert.equal(row.stopAfterSend, true, "Stop sits to the right of Send");
+      assert.ok(Math.abs(row.gap - 15) < 0.5, `Stop must sit 15px from Send, measured ${row.gap}`);
+      const actions = await page.locator(".page-actions").evaluate((bar) => {
+        const leave = [...bar.querySelectorAll("button")];
+        return { only: leave.length, offset: leave[0].getBoundingClientRect().left - bar.getBoundingClientRect().left };
+      });
+      assert.equal(actions.only, 1, "Leave session is the only page action");
+      assert.ok(actions.offset < 1, `Leave session must be left aligned, measured ${actions.offset}`);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       if (process.env.GUEST_SCREENSHOT_DIR) {
         await page.screenshot({ path: join(process.env.GUEST_SCREENSHOT_DIR, `ossm-guest-auto-send-${viewport.width}.png`), fullPage: true });
@@ -1504,7 +1578,7 @@ test("deadline-free permission recovers after revoke, Allow and rearm without au
   try {
     const { page, errors } = await openGuest(context, invitation);
     assert.equal(await page.locator(".guest-session-message").count(), 0);
-    assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), []);
+    assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), []);
     await selectSpeed(page, 30);
     await page.locator("[data-auto-send]").check();
     await page.waitForFunction(() => document.querySelector('[data-sent="speed"]')?.textContent === "30");
@@ -1518,8 +1592,15 @@ test("deadline-free permission recovers after revoke, Allow and rearm without au
     assert.match(await page.locator("main").innerText(), /Connected\. Waiting for the other person to start\./);
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
-      assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), ["grayscale(1)"]);
+      assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), ["grayscale(1)"]);
       assert.deepEqual(await filtersOnAncestors(page.locator(".guest-session-message")), []);
+      assert.deepEqual(
+        await enabledControlsInGreyscale(page),
+        [],
+        "greyscaled controls must be disabled",
+      );
+      assert.deepEqual(await filtersOnAncestors(page.locator("[data-stop-button]")), [], "Stop must stay outside the greyscaled region");
+      assert.equal(await page.locator("[data-stop-button]").isEnabled(), true, "Stop must stay available while control is withheld");
       assert.equal(await page.locator('[data-input="speed"]').inputValue(), "0");
       assert.equal(await page.locator('[data-value="speed"]').innerText(), "0");
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -1531,7 +1612,7 @@ test("deadline-free permission recovers after revoke, Allow and rearm without au
     assert.equal(await page.locator("[data-auto-send]").isChecked(), false);
     session.state = guestState({ device: { ...session.state.device, isArmed: false } });
     await page.waitForFunction(() => document.querySelector(".guest-session-message") === null);
-    assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), []);
+    assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), []);
     assert.equal(await page.locator("[data-send-button]").isDisabled(), true, "Allow alone must not bypass a disarmed device");
     session.state.device.isArmed = true;
     await page.waitForFunction(() => document.querySelector("[data-send-button]")?.disabled === false);
@@ -1753,15 +1834,17 @@ test("shared disconnect presentation pauses user and guest previews and keeps no
         notice.dispatchEvent(new CustomEvent("components-reconnect-state-changed", { detail: { state: "failed" } }));
       }, failure);
       const notice =
-        role === "user" ? page.locator(failure === "fatal" ? "#blazor-error-ui" : ".rw-reconnect-failed") : page.getByTestId("guest-disconnected");
+        role === "user" ? page.locator(failure === "fatal" ? "#blazor-error-ui" : ".reconnect-failed") : page.getByTestId("guest-disconnected");
       await notice.waitFor({ state: "visible" });
       assert.equal(await page.locator(".preview-rail").evaluate((rail) => rail.animationsPaused()), true);
       assert.equal(await page.locator(".preview-rail").getAttribute("aria-label"), settings);
-      assert.equal(await page.locator(".connection-sensitive").evaluate((element) => getComputedStyle(element).filter), "grayscale(1)");
+      const greyed = await page.evaluate(() => [...document.querySelectorAll(".connection-sensitive")].map((element) => getComputedStyle(element).filter));
+      assert.ok(greyed.length >= 1, "the connection-sensitive regions must exist");
+      assert.deepEqual(greyed, greyed.map(() => "grayscale(1)"));
       assert.equal(await notice.evaluate((element) => getComputedStyle(element).position), "static");
       assert.deepEqual(await filtersOnAncestors(notice), [], "the loss notice must retain its semantic colour");
-      assert.equal(await notice.evaluate((element) => element.matches("rw-alert.rw-inline-notification[variant='danger']")), true);
-      assert.equal(await page.locator("rw-alert:visible").filter({ hasText: "Connection lost." }).count(), 1);
+      assert.equal(await notice.evaluate((element) => element.matches(".inline-notification.danger")), true);
+      assert.equal(await page.locator(".inline-notification:visible").filter({ hasText: "Connection lost." }).count(), 1);
       if (role === "user") assert.deepEqual(await filtersOnAncestors(page.getByTestId("device-connection")), ["grayscale(1)"]);
       if (role === "guest") assert.equal(await page.locator("[data-send-button]").isDisabled(), true);
       for (const viewport of viewports) {
@@ -1823,7 +1906,13 @@ test("guest device connection loss resets speed and greys the selected preview u
       session.state.device = device === null ? null : { ...guestState().device, ...device };
       await page.locator(".preview-carriage animate").waitFor({ state: "detached" });
       await page.waitForFunction(() => document.querySelector('[data-input="speed"]')?.value === "0");
-      assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), ["grayscale(1)"]);
+      assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), ["grayscale(1)"]);
+      assert.deepEqual(
+        await enabledControlsInGreyscale(page),
+        [],
+        "greyscaled controls must be disabled while the device is unavailable",
+      );
+      assert.equal(await page.locator("[data-stop-button]").isEnabled(), true, "Stop must stay available while the device is unavailable");
       assert.match(await page.locator(".preview-rail").getAttribute("aria-label"), /0% speed/);
       assert.equal(await page.locator('[data-value="speed"]').innerText(), "0");
       assert.equal(await page.getByTestId("guest-disconnected").isVisible(), false, "device loss must not create a service-loss notice");
@@ -1854,7 +1943,7 @@ test("guest initial device states grey the preview without inventing service los
     sessions.set(invitation, { state: guestState({ device }) });
     try {
       const { page, errors } = await openGuest(context, invitation, false);
-      assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), ["grayscale(1)"], name);
+      assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), ["grayscale(1)"], name);
       assert.equal(await page.locator(".preview-carriage animate").count(), 0);
       assert.equal(await page.getByTestId("guest-disconnected").isVisible(), false);
       assert.deepEqual(errors, []);
@@ -1902,8 +1991,8 @@ test("component module import failure shows a standard fallback notice", { timeo
     assert.equal(await page.getByTestId("guest-disconnected").isVisible(), false);
     assert.equal(await page.locator(".guest-session, .preview-rail").count(), 0);
     assert.equal(await page.getByTestId("guest-invalid").count(), 0);
-    assert.equal(await page.locator("rw-alert:visible").count(), 1);
-    assert.equal(await notice.evaluate((element) => element.matches("rw-alert.rw-inline-notification[variant='danger']")), true);
+    assert.equal(await page.locator(".inline-notification:visible").count(), 1);
+    assert.equal(await notice.evaluate((element) => element.matches(".inline-notification.danger")), true);
     assert.equal(await notice.evaluate((element) => getComputedStyle(element).position), "static");
     assert.deepEqual(await filtersOnAncestors(notice), []);
     for (const viewport of viewports) {
@@ -1928,7 +2017,7 @@ test("initial API loss does not fabricate a joined guest view", { timeout: 60_00
     await page.getByTestId("guest-disconnected").waitFor({ state: "visible" });
     assert.equal(await page.locator(".guest-session, .preview-rail").count(), 0);
     assert.equal(await page.getByTestId("guest-invalid").count(), 0);
-    assert.equal(await page.locator("rw-alert:visible").filter({ hasText: "Connection lost." }).count(), 1);
+    assert.equal(await page.locator(".inline-notification:visible").filter({ hasText: "Connection lost." }).count(), 1);
   } finally {
     await context.close();
     sessions.delete(invitation);
@@ -1953,7 +2042,7 @@ test("API transport loss displays recovery and persistently disables browser req
     assert.equal(await page.locator('[data-input="speed"]').inputValue(), "0");
     assert.equal(await page.locator('[data-value="speed"]').innerText(), "0");
     assert.match(await page.locator(".preview-rail").getAttribute("aria-label"), /0% speed/);
-    assert.deepEqual(await filtersOnAncestors(page.locator(".guest-interface")), ["grayscale(1)"]);
+    assert.deepEqual(await filtersOnAncestors(page.locator(".settings-widget .guest-controlled")), ["grayscale(1)"]);
     assert.deepEqual(await filtersOnAncestors(notice), []);
     assert.match(await notice.textContent(), /Connection lost.*invitation link again/s);
     assert.equal(await page.evaluate(() => sessionStorage.getItem("ossm-guest-connection-lost")), "true");
