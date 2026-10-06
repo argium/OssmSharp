@@ -43,3 +43,4 @@ __pycache__/
 Thumbs.db
 .aspire/logs
 *.bak
+.icarus
