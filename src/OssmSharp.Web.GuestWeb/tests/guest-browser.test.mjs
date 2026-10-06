@@ -548,6 +548,8 @@ async function requestGuestStop(page, session) {
 }
 
 for (const [pendingCommand, method, label] of [
+  ["Connect", "Stop", "Stop"],
+  ["Connect", "EndGuest", "End guest"],
   ["AllowGuest", "Stop", "Stop"],
   ["AllowGuest", "EndGuest", "End guest"],
 ]) {
@@ -557,7 +559,10 @@ for (const [pendingCommand, method, label] of [
     async () => {
       const adminOrigin = await getAdminOrigin();
       const context = await browser.newContext();
-      adminSession = newAdminSession(userState(deviceState({ isConnected: true })));
+      adminSession =
+        pendingCommand === "Connect"
+          ? newAdminSession()
+          : newAdminSession(userState(deviceState({ isConnected: true })));
       const waitForCommand = async (name) => {
         const received = adminSession.received.get(name);
         const deadline = setTimeout(
@@ -857,13 +862,15 @@ test("admin connection widget distinguishes unknown, disconnected, connecting an
       }
       for (const control of [
         page.getByRole("button", { name: "Allow control", exact: true }),
-        page.getByRole("button", { name: "Stop", exact: true }),
         page.getByRole("button", { name: "Reset Position", exact: true }),
-        page.getByRole("button", { name: "End guest", exact: true }),
         page.getByTestId("attachment-length"),
       ]) {
         assert.equal(await control.isDisabled(), !connected, `${expected}: greyscaled controls must be disabled`);
       }
+      assert.equal(await page.getByRole("button", { name: "Stop", exact: true }).isEnabled(), true,
+        `${expected}: Stop remains available as a safety action`);
+      assert.equal(await page.getByRole("button", { name: "End guest", exact: true }).isEnabled(), true,
+        `${expected}: ending the guest session does not require a device connection`);
       assert.equal(await page.getByTestId("device-duration").innerText(), "Unknown", "missing connection completion time must not be invented");
       if (expected === "Failed") {
         assert.equal(await page.getByRole("button", { name: "Connect device", exact: true }).isEnabled(), true);
@@ -882,9 +889,8 @@ test("admin connection widget distinguishes unknown, disconnected, connecting an
     adminSession.pending.get("Stop")({ accepted: false, code: "device-not-connected" });
     adminSession.pending.delete("Stop");
     await page.waitForFunction(() => document.querySelector('[data-testid="device-connection-status"]')?.textContent === "Disconnected");
-    assert.equal(await page.getByRole("button", { name: "Stop", exact: true }).isDisabled(), true);
-    assert.equal(await page.getByText("The action was rejected (device-not-connected).", { exact: true }).count(), 0);
-    assert.equal(await page.locator('[role="alert"]:visible').count(), 0, "a device disconnect is represented by the connection state, not a rejection alert");
+    assert.equal(await page.getByRole("button", { name: "Stop", exact: true }).isEnabled(), true);
+    await page.getByRole("alert").filter({ hasText: "The action was rejected (device-not-connected)." }).waitFor();
 
     adminSession.state = userState(deviceState());
     await page.waitForFunction(() => document.querySelector('[data-testid="device-connection-status"]')?.textContent === "Disconnected");

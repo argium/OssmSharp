@@ -31,6 +31,7 @@ public sealed class AdminOptions : IValidatableObject
     /// Gets or sets the unit used to enter and display lengths on the user control page. Lengths remain
     /// configured in centimetres; this choice only changes how they are entered and shown.
     /// </summary>
+    [EnumDataType(typeof(LengthUnit))]
     public LengthUnit LengthUnit { get; set; } = LengthUnit.Centimetres;
 
     /// <inheritdoc />

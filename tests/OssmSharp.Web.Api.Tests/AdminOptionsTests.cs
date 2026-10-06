@@ -1,3 +1,4 @@
+using FastMoq;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -7,8 +8,15 @@ using Xunit;
 
 namespace OssmSharp.Web.Api.Tests;
 
-public sealed class AdminOptionsTests
+public sealed class AdminOptionsTests : MockerTestBase<AdminOptions>
 {
+    [Fact]
+    public void LengthSettingsHaveDocumentedDefaults()
+    {
+        Assert.Equal(40, Component.RailLengthCm);
+        Assert.Equal(LengthUnit.Centimetres, Component.LengthUnit);
+    }
+
     [Theory]
     [InlineData("https://guest.example", true)]
     [InlineData("https://guest.example:8443/", true)]
@@ -43,16 +51,15 @@ public sealed class AdminOptionsTests
     }
 
     [Theory]
-    [InlineData(null, 40d, LengthUnit.Centimetres)]
-    [InlineData("1", 1d, LengthUnit.Centimetres)]
-    [InlineData("32.5", 32.5d, LengthUnit.Centimetres)]
-    [InlineData("500", 500d, LengthUnit.Centimetres)]
-    public void RailLengthIsConfiguredInCentimetres(string? configured, double expected, LengthUnit unit)
+    [InlineData("1", 1d)]
+    [InlineData("32.5", 32.5d)]
+    [InlineData("500", 500d)]
+    public void RailLengthIsConfiguredInCentimetres(string configured, double expected)
     {
         var options = Resolve(new() { ["OSSM:Admin:RailLengthCm"] = configured });
 
         Assert.Equal(expected, options.Value.RailLengthCm);
-        Assert.Equal(unit, options.Value.LengthUnit);
+        Assert.Equal(LengthUnit.Centimetres, options.Value.LengthUnit);
     }
 
     [Theory]
@@ -74,6 +81,14 @@ public sealed class AdminOptionsTests
         var options = Resolve(new() { ["OSSM:Admin:LengthUnit"] = configured });
 
         Assert.Equal(expected, options.Value.LengthUnit);
+    }
+
+    [Fact]
+    public void UndefinedLengthUnitIsRejected()
+    {
+        var options = Resolve(new() { ["OSSM:Admin:LengthUnit"] = "42" });
+
+        Assert.Throws<OptionsValidationException>(() => options.Value);
     }
 
     private static IOptions<AdminOptions> Resolve(Dictionary<string, string?> settings)

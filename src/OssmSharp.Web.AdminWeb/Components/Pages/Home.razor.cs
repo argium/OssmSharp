@@ -213,10 +213,7 @@ public partial class Home
         }
         catch (ApiClientException error)
         {
-            if (error.Code == ControlResponseCodes.DeviceNotConnected)
-                _notice.Show(null);
-            else
-                _notice.Show($"The action was rejected ({error.Code}).", true);
+            _notice.Show($"The action was rejected ({error.Code}).", true);
         }
         finally
         {

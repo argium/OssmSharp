@@ -39,11 +39,11 @@
                     @onclick="AllowGuest">
               Allow control
             </button>
-            <button type="button" class="button danger" disabled="@(_safetyBusy || DeviceUnavailable)" @onclick="Stop">Stop</button>
+            <button type="button" class="button danger" disabled="@_safetyBusy" @onclick="Stop">Stop</button>
             <button type="button" class="button secondary" data-reset-position-button
                     disabled="@(_busy || _safetyBusy || DeviceUnavailable || _state.Device is { IsResettingPosition: true })"
                     @onclick="ResetPosition">Reset Position</button>
-            <button type="button" class="button danger" disabled="@(_safetyBusy || DeviceUnavailable || !_state.GuestJoined)" @onclick="EndGuest">
+            <button type="button" class="button danger" disabled="@(_safetyBusy || !_state.GuestJoined)" @onclick="EndGuest">
               End guest
             </button>
           </div>
